@@ -558,16 +558,20 @@
 
     function performCut(entry, splitIndex, flashX) {
       const chunk = entry.chunk;
+      const row = entry.row;
+      const rowIndex = rows.indexOf(row);
+      if (rowIndex === -1) return;
+      const chunkStillPresent = row.type === 'chunk' ? row.chunk === chunk : row.items.includes(chunk);
+      if (!chunkStillPresent) return;
       if (splitIndex <= 0 || splitIndex >= chunk.words.length) return;
       const leftChunk = createChunk(chunk.words.slice(0, splitIndex));
       const rightChunk = createChunk(chunk.words.slice(splitIndex));
-      const row = entry.row;
 
       if (row.type === 'chunk') {
-        const rowIndex = rows.indexOf(row);
         rows.splice(rowIndex, 1, { type: 'chunk', chunk: leftChunk, scrollX: 0 }, { type: 'chunk', chunk: rightChunk, scrollX: 0 });
       } else {
         const idx = row.items.indexOf(chunk);
+        if (idx === -1) return;
         row.items.splice(idx, 1, leftChunk, rightChunk);
       }
 
@@ -579,12 +583,14 @@
 
     function wrapChunk(entry) {
       const row = entry.row;
+      const rowIndex = rows.indexOf(row);
+      if (rowIndex === -1) return;
       if (row.type === 'wrapper') {
         setStatus('This piece is already inside a bag wrapper.', 'bad');
         return;
       }
-      const index = rows.indexOf(row);
-      rows.splice(index, 1, { type: 'wrapper', items: [entry.chunk], scrollX: 0 });
+      if (row.chunk !== entry.chunk) return;
+      rows.splice(rowIndex, 1, { type: 'wrapper', items: [entry.chunk], scrollX: 0 });
       layoutRows();
       setStatus('Wrapped into a clause bag. You can still split inside it.', 'good');
     }
