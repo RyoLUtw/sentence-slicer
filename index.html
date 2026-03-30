@@ -152,7 +152,6 @@
         <input id="sentenceInput" type="text" value="After the rain stopped, the children played soccer in the park yesterday." />
         <button id="loadBtn">Load Sentence</button>
         <button id="resetBtn" class="secondary">Reset Cuts</button>
-        <button id="sampleBtn" class="secondary">Use Sample</button>
         <button id="saveAnswerBtn" class="secondary">Save Correct Answer</button>
         <button id="loadSavedBtn" class="secondary">Load Saved</button>
       </div>
@@ -196,7 +195,6 @@
     const sentenceInput = document.getElementById('sentenceInput');
     const loadBtn = document.getElementById('loadBtn');
     const resetBtn = document.getElementById('resetBtn');
-    const sampleBtn = document.getElementById('sampleBtn');
     const saveAnswerBtn = document.getElementById('saveAnswerBtn');
     const loadSavedBtn = document.getElementById('loadSavedBtn');
     const chunkList = document.getElementById('chunkList');
@@ -219,6 +217,8 @@
     const ROW_FRAME = 16;
     const TOOLBAR_W = 170;
     const STORAGE_KEY = 'sentence_slice_answers_v1';
+    const DEFAULT_SENTENCE = 'After the rain stopped, the children played soccer in the park yesterday.';
+    const DEFAULT_SENTENCE_KEY = normalizeSentence(DEFAULT_SENTENCE);
 
     const LABEL_TOOLS = [
       { key: 'subject', short: 'SP', name: 'Subject Phrase', color: '#3b82f6', text: '#f8fbff' },
@@ -263,7 +263,7 @@
     const hp = {
       max: 3,
       parts: { head: 3, limbs: 3, torso: 3, equipment: 3 },
-      crystals: 0,
+      crystals: { head: 0, limbs: 0, torso: 0, equipment: 0 },
       required: 1
     };
 
@@ -277,6 +277,29 @@
 
     function saveAnswerBank() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(answerBank));
+    }
+
+    function ensureDefaultAnswer() {
+      if (answerBank[DEFAULT_SENTENCE_KEY]) return;
+      answerBank[DEFAULT_SENTENCE_KEY] = {
+        sentence: DEFAULT_SENTENCE_KEY,
+        labels: {
+          '0-4': 'modifier',
+          '4-6': 'subject',
+          '6-7': 'verb',
+          '7-8': 'object',
+          '8-12': 'modifier'
+        },
+        pieces: [
+          { key: '0-4', words: 'After the rain stopped,', label: 'modifier' },
+          { key: '4-6', words: 'the children', label: 'subject' },
+          { key: '6-7', words: 'played', label: 'verb' },
+          { key: '7-8', words: 'soccer', label: 'object' },
+          { key: '8-12', words: 'in the park yesterday.', label: 'modifier' }
+        ],
+        links: []
+      };
+      saveAnswerBank();
     }
 
     function normalizeSentence(sentence) {
@@ -436,12 +459,25 @@
       }
 
       if (style) {
-        drawRoundedRect(x + 8, y + 8, 56, 24, 10);
+        const labelW = 62;
+        const labelH = 22;
+        const labelX = x + 18;
+        const labelY = y - labelH;
+        drawRoundedRect(labelX, labelY, labelW, labelH, 8);
         ctx.fillStyle = style.color;
         ctx.fill();
         ctx.fillStyle = style.text;
         ctx.font = 'bold 13px Arial';
-        ctx.fillText(style.short, x + 16, y + 20);
+        ctx.fillText(style.short, labelX + 9, labelY + 14);
+      }
+
+      if (glueMode && gluePending === chunk.id) {
+        drawRoundedRect(x + w - 42, y + 6, 34, 24, 9);
+        ctx.fillStyle = 'rgba(251,191,36,0.92)';
+        ctx.fill();
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText('GLUE', x + w - 38, y + 22);
       }
 
       if (chunk.melt && chunk.melt.life > 0) {
@@ -758,7 +794,7 @@
       if (!part) return;
       if (delta > 0) {
         if (hp.parts[part] < hp.max) hp.parts[part] = Math.min(hp.max, hp.parts[part] + delta);
-        else hp.crystals += 1;
+        else hp.crystals[part] += 1;
       } else {
         hp.parts[part] = Math.max(0, hp.parts[part] + delta);
       }
@@ -771,17 +807,20 @@
     }
 
     function processCrystalLevelup() {
-      if (hp.crystals < hp.required) return;
-      hp.crystals = 0;
-      hp.max += 1;
-      hp.required += 1;
-      Object.keys(hp.parts).forEach((k) => {
-        hp.parts[k] = Math.min(hp.max, hp.parts[k] + 1);
-      });
-      hpCard.classList.remove('explode');
-      void hpCard.offsetWidth;
-      hpCard.classList.add('explode');
-      setStatus('Crystal threshold reached: max HP increased by 1.', 'good');
+      for (const part of Object.keys(hp.crystals)) {
+        if (hp.crystals[part] < hp.required) continue;
+        hp.crystals[part] = 0;
+        hp.max += 1;
+        hp.required += 1;
+        Object.keys(hp.parts).forEach((k) => {
+          hp.parts[k] = Math.min(hp.max, hp.parts[k] + 1);
+        });
+        hpCard.classList.remove('explode');
+        void hpCard.offsetWidth;
+        hpCard.classList.add('explode');
+        setStatus(`Crystal threshold reached from ${part}: max HP increased by 1.`, 'good');
+        break;
+      }
     }
 
     function renderHp() {
@@ -800,8 +839,11 @@
         hpRowsEl.appendChild(row);
       }
       crystalInfoEl.innerHTML = `
-        <div>💎 Possessed/Required: <strong>${hp.crystals}/${hp.required}</strong></div>
-        <div style="margin-top:8px;color:var(--muted)">Excess correct labels become crystals when related HP is already full.</div>
+        <div>💎 Head: <strong>${hp.crystals.head}/${hp.required}</strong></div>
+        <div>💎 Limbs: <strong>${hp.crystals.limbs}/${hp.required}</strong></div>
+        <div>💎 Torso: <strong>${hp.crystals.torso}/${hp.required}</strong></div>
+        <div>💎 Equipment: <strong>${hp.crystals.equipment}/${hp.required}</strong></div>
+        <div style="margin-top:8px;color:var(--muted)">Excess correct labels become crystals for that specific HP part.</div>
         <div style="margin-top:8px;color:var(--muted)">Mode: <strong>${recordAnswerMode ? 'Record Answer' : 'Check Answers'}</strong></div>
       `;
     }
@@ -931,6 +973,60 @@
       setStatus(glueMode ? 'Glue mode ON: pick first element.' : 'Glue mode OFF.', glueMode ? 'good' : '');
     }
 
+    function findChunkLocation(chunkId) {
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        const row = rows[rowIndex];
+        if (row.type === 'chunk') {
+          if (row.chunk.id === chunkId) return { row, rowIndex, chunk: row.chunk, itemIndex: 0 };
+        } else {
+          const itemIndex = row.items.findIndex((item) => item.id === chunkId);
+          if (itemIndex !== -1) return { row, rowIndex, chunk: row.items[itemIndex], itemIndex };
+        }
+      }
+      return null;
+    }
+
+    function mergeChunks(a, b) {
+      const first = a.chunk.start <= b.chunk.start ? a : b;
+      const second = first === a ? b : a;
+      if (first.chunk.end !== second.chunk.start) {
+        setStatus('Glue only merges neighboring slices from the sentence flow.', 'bad');
+        return;
+      }
+      if (first.row.type !== second.row.type) {
+        setStatus('Glue can merge two top-level slices or two adjacent slices inside the same bag.', 'bad');
+        return;
+      }
+      const merged = createChunk(
+        [...first.chunk.words, ...second.chunk.words],
+        first.chunk.start,
+        second.chunk.end
+      );
+      merged.label = first.chunk.label === second.chunk.label ? first.chunk.label : null;
+
+      if (first.row === second.row && first.row.type === 'wrapper') {
+        if (Math.abs(first.itemIndex - second.itemIndex) !== 1) {
+          setStatus('Inside a bag, glue requires adjacent pieces.', 'bad');
+          return;
+        }
+        const insertAt = Math.min(first.itemIndex, second.itemIndex);
+        first.row.items.splice(insertAt, 2, merged);
+      } else if (first.row.type === 'chunk' && second.row.type === 'chunk') {
+        const removeIndexes = [first.rowIndex, second.rowIndex].sort((x, y) => y - x);
+        for (const idx of removeIndexes) rows.splice(idx, 1);
+        rows.splice(Math.min(first.rowIndex, second.rowIndex), 0, { type: 'chunk', chunk: merged, scrollX: 0 });
+      } else {
+        setStatus('Invalid glue merge target combination.', 'bad');
+        return;
+      }
+
+      connections = connections.filter((link) =>
+        ![first.chunk.id, second.chunk.id].includes(link.a) && ![first.chunk.id, second.chunk.id].includes(link.b)
+      );
+      layoutRows();
+      setStatus('Glued: slices merged back into one element.', 'good');
+    }
+
     function applyGlueSelection(chunk) {
       if (!gluePending) {
         gluePending = chunk.id;
@@ -938,10 +1034,15 @@
         return;
       }
       if (gluePending === chunk.id) return;
-      const exists = connections.some((c) => (c.a === gluePending && c.b === chunk.id) || (c.a === chunk.id && c.b === gluePending));
-      if (!exists) connections.push({ a: gluePending, b: chunk.id });
+      const first = findChunkLocation(gluePending);
+      const second = findChunkLocation(chunk.id);
+      if (!first || !second) {
+        setStatus('Could not find one of the selected slices to merge.', 'bad');
+        gluePending = null;
+        return;
+      }
+      mergeChunks(first, second);
       gluePending = null;
-      setStatus('Elements glued together.', 'good');
     }
 
     function startPointer(evt) {
@@ -1027,11 +1128,6 @@
       dragGhost = null;
     }
 
-    function useSample() {
-      sentenceInput.value = 'The little boy in the red hat kicked the ball yesterday.';
-      applySentenceChange();
-    }
-
     function animate() {
       ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
       ctx.save();
@@ -1051,7 +1147,6 @@
 
     loadBtn.addEventListener('click', applySentenceChange);
     resetBtn.addEventListener('click', applySentenceChange);
-    sampleBtn.addEventListener('click', useSample);
     saveAnswerBtn.addEventListener('click', saveCurrentAnswer);
     loadSavedBtn.addEventListener('click', loadSavedSentence);
     sentenceInput.addEventListener('keydown', (e) => {
@@ -1071,6 +1166,7 @@
     });
 
     resizeCanvas();
+    ensureDefaultAnswer();
     renderHp();
     applySentenceChange();
     animate();
