@@ -30,11 +30,7 @@
       justify-content: center;
       padding: 20px;
     }
-    .app {
-      width: min(1100px, 100%);
-      display: grid;
-      gap: 16px;
-    }
+    .app { width: min(1200px, 100%); display: grid; gap: 16px; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--panel-border);
@@ -42,26 +38,13 @@
       backdrop-filter: blur(10px);
       box-shadow: 0 20px 40px rgba(0,0,0,0.22);
     }
-    .topbar {
-      padding: 16px 18px;
-      display: grid;
-      gap: 12px;
-    }
-    .title {
-      font-size: 1.35rem;
-      font-weight: 700;
-      margin: 0;
-    }
-    .sub {
-      color: var(--muted);
-      line-height: 1.45;
-      margin: 0;
-      font-size: 0.95rem;
-    }
+    .topbar { padding: 16px 18px; display: grid; gap: 12px; }
+    .title { font-size: 1.35rem; font-weight: 700; margin: 0; }
+    .sub { color: var(--muted); line-height: 1.45; margin: 0; font-size: 0.95rem; }
     .controls {
       display: grid;
       gap: 10px;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto auto;
       align-items: center;
     }
     input[type="text"] {
@@ -89,40 +72,58 @@
       color: var(--text);
       border: 1px solid rgba(255,255,255,0.12);
     }
-    .stageWrap {
-      padding: 14px;
-    }
+    button.warn { border: 1px solid rgba(252, 165, 165, 0.35); color: #ffe4e4; }
+    .stageWrap { padding: 14px; }
     canvas {
       width: 100%;
-      height: min(68vh, 680px);
+      height: min(62vh, 620px);
       display: block;
       border-radius: 16px;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
+      background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
     }
-    .bottom {
+    .hud {
       display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 16px;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
     }
-    .legend, .chunks {
-      padding: 16px 18px;
+    .hudCard {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      position: relative;
+      overflow: hidden;
     }
-    h2 {
-      margin: 0 0 10px;
-      font-size: 1.05rem;
+    .hudCard.explode::after {
+      content: '✦';
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #fef08a;
+      font-size: 2.1rem;
+      animation: burst 450ms ease-out;
     }
-    ul {
-      margin: 0;
-      padding-left: 18px;
-      color: var(--muted);
-      line-height: 1.55;
+    @keyframes burst {
+      from { transform: scale(0.1); opacity: 1; }
+      to { transform: scale(1.4); opacity: 0; }
     }
-    .chunkList {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+    .hpRow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.93rem; }
+    .pips { display: inline-flex; gap: 6px; }
+    .pip {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.28);
+      background: rgba(255,255,255,0.12);
     }
+    .pip.on { background: #22c55e; border-color: #86efac; box-shadow: 0 0 8px rgba(34,197,94,0.45); }
+    .bottom { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
+    .legend, .chunks { padding: 16px 18px; }
+    h2 { margin: 0 0 10px; font-size: 1.05rem; }
+    ul { margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.55; }
+    .chunkList { display: flex; flex-wrap: wrap; gap: 8px; }
     .chip {
       padding: 8px 10px;
       border-radius: 999px;
@@ -131,17 +132,12 @@
       color: #dff5ff;
       font-size: 0.92rem;
     }
-    .status {
-      margin-top: 10px;
-      min-height: 22px;
-      font-size: 0.92rem;
-      color: var(--muted);
-    }
+    .status { margin-top: 10px; min-height: 22px; font-size: 0.92rem; color: var(--muted); }
     .status.good { color: var(--good); }
     .status.bad { color: var(--bad); }
-    @media (max-width: 860px) {
-      .controls { grid-template-columns: 1fr 1fr; }
-      .bottom { grid-template-columns: 1fr; }
+    @media (max-width: 1000px) {
+      .controls { grid-template-columns: 1fr 1fr 1fr; }
+      .bottom, .hud { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -150,28 +146,40 @@
     <section class="panel topbar">
       <div>
         <h1 class="title">Sentence Slice Prototype</h1>
-        <p class="sub">Swipe across the sentence strip. The prototype only cuts at legal spaces between words, snaps the cut to the nearest valid boundary, and prevents splitting a word in half.</p>
+        <p class="sub">Slice the sentence, label parts, and glue elements together. Save answer keys per sentence, then practice against saved keys.</p>
       </div>
       <div class="controls">
         <input id="sentenceInput" type="text" value="After the rain stopped, the children played soccer in the park yesterday." />
         <button id="loadBtn">Load Sentence</button>
         <button id="resetBtn" class="secondary">Reset Cuts</button>
         <button id="sampleBtn" class="secondary">Use Sample</button>
+        <button id="saveAnswerBtn" class="secondary">Save Correct Answer</button>
+        <button id="loadSavedBtn" class="secondary">Load Saved</button>
       </div>
     </section>
 
     <section class="panel stageWrap">
       <canvas id="stage"></canvas>
+      <div class="hud">
+        <div id="hpCard" class="hudCard">
+          <h2>HP Tracker</h2>
+          <div id="hpRows"></div>
+        </div>
+        <div id="crystalCard" class="hudCard">
+          <h2>Crystal Collection</h2>
+          <div id="crystalInfo"></div>
+        </div>
+      </div>
     </section>
 
     <section class="bottom">
       <div class="panel legend">
         <h2>How this prototype behaves</h2>
         <ul>
-          <li>Swipe through words to split only at legal spaces between words.</li>
-          <li>Drag the outer lane around a row horizontally to reveal clipped text.</li>
-          <li>Drag the bag from the right tool belt onto a piece to wrap it as a clause row.</li>
-          <li>Wrapped rows can be split further and all resulting pieces stay inside that wrap.</li>
+          <li>Swipe to split only at legal spaces between words.</li>
+          <li>Drag label tools from the right belt onto sliced elements to color-tag them.</li>
+          <li>Glue tool is toggle-based: click tool, pick element A, pick element B to connect them.</li>
+          <li>If an answer key exists for this sentence, labels are auto-checked on drop.</li>
         </ul>
         <div id="status" class="status">Ready.</div>
       </div>
@@ -189,8 +197,13 @@
     const loadBtn = document.getElementById('loadBtn');
     const resetBtn = document.getElementById('resetBtn');
     const sampleBtn = document.getElementById('sampleBtn');
+    const saveAnswerBtn = document.getElementById('saveAnswerBtn');
+    const loadSavedBtn = document.getElementById('loadSavedBtn');
     const chunkList = document.getElementById('chunkList');
     const statusEl = document.getElementById('status');
+    const hpRowsEl = document.getElementById('hpRows');
+    const crystalInfoEl = document.getElementById('crystalInfo');
+    const hpCard = document.getElementById('hpCard');
 
     const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     const FONT = '24px Arial';
@@ -198,14 +211,33 @@
     const STRIP_PAD_X = 20;
     const STRIP_H = 68;
     const WORD_GAP = 8;
-    const CUT_ZONE_HALF = 12;
     const SWIPE_HIT_RADIUS = 18;
     const WORD_PROTECT_RADIUS = 10;
     const SPLIT_GAP = 20;
     const ROW_GAP = 24;
     const ROW_MARGIN = 24;
     const ROW_FRAME = 16;
-    const TOOLBAR_W = 96;
+    const TOOLBAR_W = 170;
+    const STORAGE_KEY = 'sentence_slice_answers_v1';
+
+    const LABEL_TOOLS = [
+      { key: 'subject', short: 'SP', name: 'Subject Phrase', color: '#3b82f6', text: '#f8fbff' },
+      { key: 'verb', short: 'VP', name: 'Verb Phrase', color: '#ef4444', text: '#fff5f5' },
+      { key: 'object', short: 'OP', name: 'Object Phrase', color: '#22c55e', text: '#f3fff4' },
+      { key: 'modifier', short: 'CMP', name: 'Clause Modifier Phrase', color: '#facc15', text: '#2b2100' },
+      { key: 'connecting', short: 'CD', name: 'Connecting Device', color: '#111111', text: '#ffffff' }
+    ];
+    const TOOL_DEFS = [
+      { key: 'bag', short: '👜', name: 'Bag Tool', type: 'bag' },
+      ...LABEL_TOOLS.map((t) => ({ ...t, type: 'label' })),
+      { key: 'glue', short: '🧪', name: 'Glue Tool', type: 'glue' }
+    ];
+    const PART_BINDINGS = {
+      subject: 'head',
+      verb: 'limbs',
+      object: 'torso',
+      modifier: 'equipment'
+    };
 
     let rows = [];
     let particles = [];
@@ -217,8 +249,57 @@
     let activeRow = null;
     let panAnchorX = 0;
     let panStartScroll = 0;
-    let bagDrag = null;
+    let dragGhost = null;
     let toolLayout = null;
+    let nextChunkId = 1;
+    let glueMode = false;
+    let gluePending = null;
+    let connections = [];
+    let currentSentenceKey = '';
+    let recordAnswerMode = true;
+    let answerBank = loadAnswerBank();
+    let activeAnswer = null;
+
+    const hp = {
+      max: 3,
+      parts: { head: 3, limbs: 3, torso: 3, equipment: 3 },
+      crystals: 0,
+      required: 1
+    };
+
+    function loadAnswerBank() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function saveAnswerBank() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(answerBank));
+    }
+
+    function normalizeSentence(sentence) {
+      return sentence.trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function rangeKey(chunk) {
+      return `${chunk.start}-${chunk.end}`;
+    }
+
+    function createChunk(words, start, end) {
+      return measureChunkLayout({ id: nextChunkId++, words, start, end, w: 0, h: STRIP_H, layout: null, label: null, melt: null });
+    }
+
+    function tokenize(sentence) {
+      return sentence.trim().split(/\s+/).filter(Boolean);
+    }
+
+    function buildInitialRows(sentence) {
+      const words = tokenize(sentence);
+      if (!words.length) return [];
+      return [{ type: 'chunk', chunk: createChunk(words, 0, words.length), scrollX: 0, y: 95, targetY: 95 }];
+    }
 
     function resizeCanvas() {
       const rect = canvas.getBoundingClientRect();
@@ -239,31 +320,16 @@
       }
     }
 
-    function tokenize(sentence) {
-      return sentence.trim().split(/\s+/).filter(Boolean);
-    }
-
-    function createChunk(words) {
-      return measureChunkLayout({ words, w: 0, h: STRIP_H, layout: null });
-    }
-
-    function buildInitialRows(sentence) {
-      const words = tokenize(sentence);
-      if (!words.length) return [];
-      return [{ type: 'chunk', chunk: createChunk(words), scrollX: 0, y: 95, targetY: 95 }];
-    }
-
     function measureChunkLayout(chunk) {
       ctx.font = FONT;
-      const words = chunk.words;
       const wordMetrics = [];
       let cursor = STRIP_PAD_X;
-      for (let i = 0; i < words.length; i++) {
-        const text = words[i];
+      for (let i = 0; i < chunk.words.length; i++) {
+        const text = chunk.words[i];
         const width = ctx.measureText(text).width + WORD_PAD_X * 2;
         wordMetrics.push({ text, x: cursor, w: width });
         cursor += width;
-        if (i < words.length - 1) cursor += WORD_GAP;
+        if (i < chunk.words.length - 1) cursor += WORD_GAP;
       }
       chunk.w = cursor + STRIP_PAD_X;
       chunk.layout = {
@@ -310,12 +376,18 @@
         const div = document.createElement('div');
         div.className = 'chip';
         if (row.type === 'chunk') {
-          div.textContent = row.chunk.words.join(' ');
+          const labelShort = row.chunk.label ? ` [${labelShortName(row.chunk.label)}]` : '';
+          div.textContent = row.chunk.words.join(' ') + labelShort;
         } else {
-          div.textContent = '👜 ' + row.items.map((item) => item.words.join(' ')).join(' | ');
+          div.textContent = '👜 ' + row.items.map((item) => `${item.words.join(' ')}${item.label ? ` [${labelShortName(item.label)}]` : ''}`).join(' | ');
         }
         chunkList.appendChild(div);
       }
+    }
+
+    function labelShortName(key) {
+      const found = LABEL_TOOLS.find((x) => x.key === key);
+      return found ? found.short : '';
     }
 
     function drawRoundedRect(x, y, w, h, r) {
@@ -328,6 +400,10 @@
       ctx.closePath();
     }
 
+    function getLabelStyle(labelKey) {
+      return LABEL_TOOLS.find((t) => t.key === labelKey) || null;
+    }
+
     function drawChunkAt(chunk, x, y) {
       const w = chunk.w;
       const h = chunk.h;
@@ -337,8 +413,10 @@
       grad.addColorStop(1, 'rgba(251, 191, 36, 0.95)');
       ctx.fillStyle = grad;
       ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+
+      const style = chunk.label ? getLabelStyle(chunk.label) : null;
+      ctx.lineWidth = style ? 4 : 2;
+      ctx.strokeStyle = style ? style.color : 'rgba(255,255,255,0.45)';
       ctx.stroke();
 
       ctx.fillStyle = 'rgba(120, 53, 15, 0.16)';
@@ -355,6 +433,29 @@
         ctx.fill();
         ctx.fillStyle = '#3b2200';
         ctx.fillText(word.text, wx + WORD_PAD_X, y + h / 2 + 1);
+      }
+
+      if (style) {
+        drawRoundedRect(x + 8, y + 8, 56, 24, 10);
+        ctx.fillStyle = style.color;
+        ctx.fill();
+        ctx.fillStyle = style.text;
+        ctx.font = 'bold 13px Arial';
+        ctx.fillText(style.short, x + 16, y + 20);
+      }
+
+      if (chunk.melt && chunk.melt.life > 0) {
+        const p = chunk.melt.life;
+        const alpha = Math.min(0.9, p);
+        const meltY = y + h * (1 - p);
+        ctx.save();
+        drawRoundedRect(x + 2, meltY, w - 4, h * p, 12);
+        ctx.fillStyle = chunk.melt.type === 'bad' ? `rgba(220,38,38,${alpha})` : `rgba(16,185,129,${alpha})`;
+        ctx.fill();
+        ctx.font = '32px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(chunk.melt.type === 'bad' ? '☠' : '💎', x + w / 2 - 12, y + h / 2 + 8);
+        ctx.restore();
       }
     }
 
@@ -393,18 +494,37 @@
         }
         ctx.restore();
       }
+      drawConnections();
+    }
+
+    function drawConnections() {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(226,232,240,0.75)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([7, 6]);
+      for (const link of connections) {
+        const a = renderMap.find((r) => r.chunk.id === link.a);
+        const b = renderMap.find((r) => r.chunk.id === link.b);
+        if (!a || !b) continue;
+        const ax = a.x + a.w / 2;
+        const ay = a.y + a.h / 2;
+        const bx = b.x + b.w / 2;
+        const by = b.y + b.h / 2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
     }
 
     function drawToolbar() {
       const x = getWorkWidth() + 8;
       const w = TOOLBAR_W - 16;
       const y = 58;
-      const h = Math.max(180, canvas.clientHeight - 112);
-      const slotX = x + 12;
-      const slotY = y + 18;
-      const slotW = w - 24;
-      const slotH = 72;
-      toolLayout = { bag: { x: slotX, y: slotY, w: slotW, h: slotH } };
+      const h = Math.max(210, canvas.clientHeight - 112);
+      toolLayout = {};
 
       ctx.save();
       drawRoundedRect(x, y, w, h, 16);
@@ -413,18 +533,25 @@
       ctx.strokeStyle = 'rgba(255,255,255,0.18)';
       ctx.stroke();
 
-      drawRoundedRect(slotX, slotY, slotW, slotH, 12);
-      ctx.fillStyle = 'rgba(125,211,252,0.14)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(125,211,252,0.5)';
-      ctx.stroke();
-      ctx.fillStyle = '#d9f3ff';
-      ctx.font = '13px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Bag Tool', slotX + slotW / 2, slotY + 56);
-      ctx.font = '34px Arial';
-      ctx.fillText('👜', slotX + slotW / 2, slotY + 34);
-      ctx.textAlign = 'left';
+      let slotY = y + 12;
+      for (const tool of TOOL_DEFS) {
+        const slot = { x: x + 10, y: slotY, w: w - 20, h: 42 };
+        toolLayout[tool.key] = slot;
+        drawRoundedRect(slot.x, slot.y, slot.w, slot.h, 10);
+        const active = tool.key === 'glue' && glueMode;
+        ctx.fillStyle = active ? 'rgba(251,191,36,0.35)' : 'rgba(125,211,252,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = active ? 'rgba(251,191,36,0.95)' : 'rgba(125,211,252,0.45)';
+        ctx.stroke();
+
+        ctx.fillStyle = tool.color || '#d9f3ff';
+        ctx.font = 'bold 13px Arial';
+        ctx.fillText(tool.short, slot.x + 8, slot.y + 25);
+        ctx.fillStyle = '#d9f3ff';
+        ctx.font = '11px Arial';
+        ctx.fillText(tool.name, slot.x + 40, slot.y + 25);
+        slotY += 48;
+      }
       ctx.restore();
     }
 
@@ -442,12 +569,15 @@
       ctx.restore();
     }
 
-    function drawBagDragGhost() {
-      if (!bagDrag) return;
+    function drawDragGhost() {
+      if (!dragGhost) return;
+      const tool = TOOL_DEFS.find((t) => t.key === dragGhost.toolKey);
+      if (!tool) return;
       ctx.save();
-      ctx.globalAlpha = 0.9;
-      ctx.font = '38px Arial';
-      ctx.fillText('👜', bagDrag.x - 16, bagDrag.y + 14);
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = tool.color || '#d9f3ff';
+      ctx.font = 'bold 30px Arial';
+      ctx.fillText(tool.short, dragGhost.x - 20, dragGhost.y + 10);
       ctx.restore();
     }
 
@@ -480,6 +610,12 @@
         p.vy += 0.08;
         p.life -= 0.03;
         if (p.life <= 0) particles.splice(i, 1);
+      }
+      for (const row of rows) {
+        const items = row.type === 'chunk' ? [row.chunk] : row.items;
+        for (const item of items) {
+          if (item.melt && item.melt.life > 0) item.melt.life -= 0.03;
+        }
       }
     }
 
@@ -564,8 +700,11 @@
       const chunkStillPresent = row.type === 'chunk' ? row.chunk === chunk : row.items.includes(chunk);
       if (!chunkStillPresent) return;
       if (splitIndex <= 0 || splitIndex >= chunk.words.length) return;
-      const leftChunk = createChunk(chunk.words.slice(0, splitIndex));
-      const rightChunk = createChunk(chunk.words.slice(splitIndex));
+
+      const leftChunk = createChunk(chunk.words.slice(0, splitIndex), chunk.start, chunk.start + splitIndex);
+      const rightChunk = createChunk(chunk.words.slice(splitIndex), chunk.start + splitIndex, chunk.end);
+      leftChunk.label = chunk.label;
+      rightChunk.label = chunk.label;
 
       if (row.type === 'chunk') {
         rows.splice(rowIndex, 1, { type: 'chunk', chunk: leftChunk, scrollX: 0 }, { type: 'chunk', chunk: rightChunk, scrollX: 0 });
@@ -575,6 +714,7 @@
         row.items.splice(idx, 1, leftChunk, rightChunk);
       }
 
+      connections = connections.filter((c) => c.a !== chunk.id && c.b !== chunk.id);
       layoutRows();
       flashLine = { x: flashX, y1: entry.y - 8, y2: entry.y + chunk.h + 8, life: 1, color: 'rgba(134,239,172,0.95)' };
       spawnParticles(flashX, entry.y + chunk.h / 2, 'rgba(134,239,172,0.95)');
@@ -585,14 +725,158 @@
       const row = entry.row;
       const rowIndex = rows.indexOf(row);
       if (rowIndex === -1) return;
-      if (row.type === 'wrapper') {
-        setStatus('This piece is already inside a bag wrapper.', 'bad');
-        return;
-      }
+      if (row.type === 'wrapper') return setStatus('This piece is already inside a bag wrapper.', 'bad');
       if (row.chunk !== entry.chunk) return;
       rows.splice(rowIndex, 1, { type: 'wrapper', items: [entry.chunk], scrollX: 0 });
       layoutRows();
       setStatus('Wrapped into a clause bag. You can still split inside it.', 'good');
+    }
+
+    function applyLabelToChunk(chunk, labelKey) {
+      chunk.label = labelKey;
+      updateChunkList();
+      checkLabel(chunk);
+    }
+
+    function checkLabel(chunk) {
+      if (recordAnswerMode || !activeAnswer) return;
+      const expected = activeAnswer.labels[rangeKey(chunk)];
+      if (!expected) return;
+      if (expected === chunk.label) {
+        chunk.melt = { type: 'good', life: 1 };
+        adjustHp(PART_BINDINGS[chunk.label], +1, chunk);
+        setStatus(`Correct: ${labelShortName(chunk.label)} validated.`, 'good');
+      } else {
+        chunk.melt = { type: 'bad', life: 1 };
+        const damagedPart = PART_BINDINGS[expected] || 'torso';
+        adjustHp(damagedPart, -1, chunk);
+        setStatus(`Wrong label. Expected ${labelShortName(expected)} for this slice.`, 'bad');
+      }
+    }
+
+    function adjustHp(part, delta, chunk) {
+      if (!part) return;
+      if (delta > 0) {
+        if (hp.parts[part] < hp.max) hp.parts[part] = Math.min(hp.max, hp.parts[part] + delta);
+        else hp.crystals += 1;
+      } else {
+        hp.parts[part] = Math.max(0, hp.parts[part] + delta);
+      }
+      if (chunk) {
+        const hit = renderMap.find((r) => r.chunk.id === chunk.id);
+        if (hit) spawnParticles(hit.x + hit.w / 2, hit.y + hit.h / 2, delta > 0 ? '#22c55e' : '#ef4444');
+      }
+      processCrystalLevelup();
+      renderHp();
+    }
+
+    function processCrystalLevelup() {
+      if (hp.crystals < hp.required) return;
+      hp.crystals = 0;
+      hp.max += 1;
+      hp.required += 1;
+      Object.keys(hp.parts).forEach((k) => {
+        hp.parts[k] = Math.min(hp.max, hp.parts[k] + 1);
+      });
+      hpCard.classList.remove('explode');
+      void hpCard.offsetWidth;
+      hpCard.classList.add('explode');
+      setStatus('Crystal threshold reached: max HP increased by 1.', 'good');
+    }
+
+    function renderHp() {
+      const partOrder = [
+        { key: 'head', label: 'Head (Subject)' },
+        { key: 'limbs', label: 'Limbs (Verb)' },
+        { key: 'torso', label: 'Torso (Object)' },
+        { key: 'equipment', label: 'Equipment (Modifier)' }
+      ];
+      hpRowsEl.innerHTML = '';
+      for (const part of partOrder) {
+        const row = document.createElement('div');
+        row.className = 'hpRow';
+        const pips = Array.from({ length: hp.max }, (_, i) => `<span class="pip ${i < hp.parts[part.key] ? 'on' : ''}"></span>`).join('');
+        row.innerHTML = `<span>${part.label}</span><span class="pips">${pips}</span>`;
+        hpRowsEl.appendChild(row);
+      }
+      crystalInfoEl.innerHTML = `
+        <div>💎 Possessed/Required: <strong>${hp.crystals}/${hp.required}</strong></div>
+        <div style="margin-top:8px;color:var(--muted)">Excess correct labels become crystals when related HP is already full.</div>
+        <div style="margin-top:8px;color:var(--muted)">Mode: <strong>${recordAnswerMode ? 'Record Answer' : 'Check Answers'}</strong></div>
+      `;
+    }
+
+    function serializeCurrentSetup() {
+      const labels = {};
+      const pieces = [];
+      for (const row of rows) {
+        const chunks = row.type === 'chunk' ? [row.chunk] : row.items;
+        for (const chunk of chunks) {
+          const key = rangeKey(chunk);
+          pieces.push({ key, words: chunk.words.join(' '), label: chunk.label || null });
+          if (chunk.label) labels[key] = chunk.label;
+        }
+      }
+      const linkedRanges = connections
+        .map((link) => {
+          const a = renderMap.find((m) => m.chunk.id === link.a)?.chunk;
+          const b = renderMap.find((m) => m.chunk.id === link.b)?.chunk;
+          if (!a || !b) return null;
+          return [rangeKey(a), rangeKey(b)].sort();
+        })
+        .filter(Boolean);
+      return { sentence: currentSentenceKey, labels, pieces, links: linkedRanges };
+    }
+
+    function saveCurrentAnswer() {
+      if (!currentSentenceKey) return;
+      const snapshot = serializeCurrentSetup();
+      answerBank[currentSentenceKey] = snapshot;
+      saveAnswerBank();
+      activeAnswer = snapshot;
+      recordAnswerMode = false;
+      renderHp();
+      setStatus('Correct answer saved to local storage. Switched to check mode.', 'good');
+    }
+
+    function applySentenceChange() {
+      const normalized = normalizeSentence(sentenceInput.value);
+      const sentenceChanged = normalized !== currentSentenceKey;
+      if (sentenceChanged) {
+        currentSentenceKey = normalized;
+        rows = buildInitialRows(sentenceInput.value);
+        connections = [];
+        gluePending = null;
+        const saved = answerBank[currentSentenceKey] || null;
+        if (saved) {
+          activeAnswer = saved;
+          recordAnswerMode = false;
+          setStatus('Loaded sentence with saved answer key. Check mode enabled.', 'good');
+        } else {
+          activeAnswer = null;
+          recordAnswerMode = true;
+          setStatus('New sentence detected. Record answer mode enabled.', 'good');
+        }
+      } else {
+        rows = buildInitialRows(sentenceInput.value);
+        connections = [];
+        gluePending = null;
+        setStatus('Sentence reset.');
+      }
+      layoutRows();
+      renderHp();
+    }
+
+    function loadSavedSentence() {
+      const keys = Object.keys(answerBank);
+      if (!keys.length) return setStatus('No saved sentences in local storage.', 'bad');
+      const numbered = keys.map((k, i) => `${i + 1}. ${k}`).join('\n');
+      const selected = prompt(`Saved sentences:\n${numbered}\n\nEnter number to load:`);
+      if (!selected) return;
+      const idx = Number(selected) - 1;
+      if (Number.isNaN(idx) || idx < 0 || idx >= keys.length) return setStatus('Invalid selection.', 'bad');
+      sentenceInput.value = keys[idx];
+      applySentenceChange();
     }
 
     function getPos(evt) {
@@ -633,13 +917,51 @@
       return null;
     }
 
+    function hitTool(pos) {
+      for (const tool of TOOL_DEFS) {
+        const slot = toolLayout?.[tool.key];
+        if (slot && pointInRect(pos, slot)) return tool;
+      }
+      return null;
+    }
+
+    function toggleGlueMode() {
+      glueMode = !glueMode;
+      gluePending = null;
+      setStatus(glueMode ? 'Glue mode ON: pick first element.' : 'Glue mode OFF.', glueMode ? 'good' : '');
+    }
+
+    function applyGlueSelection(chunk) {
+      if (!gluePending) {
+        gluePending = chunk.id;
+        setStatus('First glue target selected. Now select the second element.', 'good');
+        return;
+      }
+      if (gluePending === chunk.id) return;
+      const exists = connections.some((c) => (c.a === gluePending && c.b === chunk.id) || (c.a === chunk.id && c.b === gluePending));
+      if (!exists) connections.push({ a: gluePending, b: chunk.id });
+      gluePending = null;
+      setStatus('Elements glued together.', 'good');
+    }
+
     function startPointer(evt) {
       evt.preventDefault();
       const pos = getPos(evt);
 
-      if (toolLayout?.bag && pointInRect(pos, toolLayout.bag)) {
-        dragMode = 'bag';
-        bagDrag = { x: pos.x, y: pos.y };
+      const tool = hitTool(pos);
+      if (tool) {
+        if (tool.type === 'glue') {
+          toggleGlueMode();
+          return;
+        }
+        dragMode = 'toolDrag';
+        dragGhost = { toolKey: tool.key, x: pos.x, y: pos.y };
+        return;
+      }
+
+      const target = hitChunk(pos);
+      if (glueMode && target) {
+        dragMode = 'glueSelect';
         return;
       }
 
@@ -652,6 +974,7 @@
         return;
       }
 
+      if (glueMode) return;
       dragMode = 'swipe';
       swipePoints = [pos];
     }
@@ -666,9 +989,9 @@
       } else if (dragMode === 'pan' && activeRow) {
         activeRow.scrollX = panStartScroll - (pos.x - panAnchorX);
         ensureRowScrollBounds(activeRow);
-      } else if (dragMode === 'bag' && bagDrag) {
-        bagDrag.x = pos.x;
-        bagDrag.y = pos.y;
+      } else if (dragMode === 'toolDrag' && dragGhost) {
+        dragGhost.x = pos.x;
+        dragGhost.y = pos.y;
       }
     }
 
@@ -683,26 +1006,30 @@
         setTimeout(() => (swipePoints = []), 70);
       } else if (dragMode === 'pan') {
         setStatus('Dragged lane horizontally to inspect cropped content.');
-      } else if (dragMode === 'bag') {
+      } else if (dragMode === 'toolDrag') {
         const target = hitChunk(pos);
-        if (target) wrapChunk(target);
-        else setStatus('Drop the bag onto a sentence piece to wrap it.', 'bad');
+        const tool = TOOL_DEFS.find((t) => t.key === dragGhost?.toolKey);
+        if (!tool || !target) {
+          setStatus('Drop a tool onto a sentence element.', 'bad');
+        } else if (tool.type === 'bag') {
+          wrapChunk(target);
+        } else if (tool.type === 'label') {
+          applyLabelToChunk(target.chunk, tool.key);
+          setStatus(`${tool.name} applied.`, 'good');
+        }
+      } else if (dragMode === 'glueSelect') {
+        const target = hitChunk(pos);
+        if (target) applyGlueSelection(target.chunk);
       }
 
       dragMode = null;
       activeRow = null;
-      bagDrag = null;
-    }
-
-    function resetSentence() {
-      rows = buildInitialRows(sentenceInput.value);
-      layoutRows();
-      setStatus('Sentence reset.');
+      dragGhost = null;
     }
 
     function useSample() {
       sentenceInput.value = 'The little boy in the red hat kicked the ball yesterday.';
-      resetSentence();
+      applySentenceChange();
     }
 
     function animate() {
@@ -718,15 +1045,17 @@
       updateParticles();
       drawParticles();
       drawFlashLine();
-      drawBagDragGhost();
+      drawDragGhost();
       requestAnimationFrame(animate);
     }
 
-    loadBtn.addEventListener('click', resetSentence);
-    resetBtn.addEventListener('click', resetSentence);
+    loadBtn.addEventListener('click', applySentenceChange);
+    resetBtn.addEventListener('click', applySentenceChange);
     sampleBtn.addEventListener('click', useSample);
+    saveAnswerBtn.addEventListener('click', saveCurrentAnswer);
+    loadSavedBtn.addEventListener('click', loadSavedSentence);
     sentenceInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') resetSentence();
+      if (e.key === 'Enter') applySentenceChange();
     });
 
     canvas.addEventListener('mousedown', startPointer);
@@ -742,7 +1071,8 @@
     });
 
     resizeCanvas();
-    resetSentence();
+    renderHp();
+    applySentenceChange();
     animate();
   </script>
 </body>
