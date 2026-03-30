@@ -151,6 +151,37 @@
     .status { margin-top: 10px; min-height: 22px; font-size: 0.92rem; color: var(--muted); }
     .status.good { color: var(--good); }
     .status.bad { color: var(--bad); }
+    .debugToggle {
+      position: fixed;
+      right: 16px;
+      top: 14px;
+      z-index: 20;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(15,23,42,0.85);
+      color: var(--text);
+      font-size: 0.88rem;
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .debugTray {
+      position: fixed;
+      left: 14px;
+      right: 14px;
+      bottom: 12px;
+      z-index: 18;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(15,23,42,0.86);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.3);
+      display: none;
+      max-height: 28vh;
+      overflow-y: auto;
+    }
+    .debugTitle { margin: 0 0 8px; font-size: 0.95rem; color: #dbeafe; }
     @media (max-width: 1000px) {
       .controls { grid-template-columns: 1fr 1fr 1fr; }
       .bottom, .hud { grid-template-columns: 1fr; }
@@ -158,6 +189,11 @@
   </style>
 </head>
 <body>
+  <label class="debugToggle"><input id="debugToggle" type="checkbox" /> Debug</label>
+  <div id="debugTray" class="debugTray">
+    <h3 class="debugTitle">Correct answer (debug)</h3>
+    <div id="debugList" class="chunkList"></div>
+  </div>
   <div class="app">
     <section class="panel topbar">
       <div>
@@ -215,6 +251,9 @@
     const resetBtn = document.getElementById('resetBtn');
     const modeToggleEl = document.getElementById('modeToggle');
     const loadSavedBtn = document.getElementById('loadSavedBtn');
+    const debugToggleEl = document.getElementById('debugToggle');
+    const debugTrayEl = document.getElementById('debugTray');
+    const debugListEl = document.getElementById('debugList');
     const chunkList = document.getElementById('chunkList');
     const statusEl = document.getElementById('status');
     const hpRowsEl = document.getElementById('hpRows');
@@ -276,6 +315,7 @@
     let connections = [];
     let currentSentenceKey = '';
     let editMode = false;
+    let debugMode = false;
     let answerBank = loadAnswerBank();
     let activeAnswer = null;
 
@@ -430,6 +470,26 @@
     function labelShortName(key) {
       const found = LABEL_TOOLS.find((x) => x.key === key);
       return found ? found.short : '';
+    }
+
+    function renderDebugAnswer() {
+      debugTrayEl.style.display = debugMode ? 'block' : 'none';
+      debugListEl.innerHTML = '';
+      if (!debugMode) return;
+      if (!activeAnswer?.pieces?.length) {
+        const empty = document.createElement('div');
+        empty.className = 'chip';
+        empty.textContent = 'No saved correct answer for this sentence.';
+        debugListEl.appendChild(empty);
+        return;
+      }
+      for (const piece of activeAnswer.pieces) {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        const short = piece.label ? ` [${labelShortName(piece.label)}]` : '';
+        chip.textContent = `${piece.words}${short}`;
+        debugListEl.appendChild(chip);
+      }
     }
 
     function drawRoundedRect(x, y, w, h, r) {
@@ -903,6 +963,7 @@
       answerBank[currentSentenceKey] = snapshot;
       saveAnswerBank();
       activeAnswer = snapshot;
+      renderDebugAnswer();
       return snapshot;
     }
 
@@ -932,6 +993,7 @@
       layoutRows();
       renderHp();
       renderHudVisibility();
+      renderDebugAnswer();
     }
 
     function loadSavedSentence() {
@@ -1187,6 +1249,11 @@
         setStatus('Play mode ON: tool actions now check against the saved correct answer.', 'good');
       }
       renderHp();
+      renderDebugAnswer();
+    });
+    debugToggleEl.addEventListener('change', () => {
+      debugMode = debugToggleEl.checked;
+      renderDebugAnswer();
     });
     sentenceInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') applySentenceChange();
@@ -1209,6 +1276,7 @@
     renderHudVisibility();
     renderHp();
     applySentenceChange();
+    renderDebugAnswer();
     animate();
   </script>
 </body>
