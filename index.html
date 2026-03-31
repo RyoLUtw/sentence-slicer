@@ -943,22 +943,26 @@
 
     function checkLabel(chunk) {
       if (editMode || !activeAnswer) return;
-      const expected = activeAnswer.labels[rangeKey(chunk)];
-      if (!expected) return;
+      const key = rangeKey(chunk);
+      const expected = activeAnswer.labels[key];
+      const sliceCorrect = !!activeAnswer.pieces?.some((piece) => piece.key === key);
+      const labelCorrect = !!expected && expected === chunk.label;
+      const isCorrect = sliceCorrect && labelCorrect;
       const payload = {
         input: {
-          range: rangeKey(chunk),
+          range: key,
           words: chunk.words.join(' '),
           label: chunk.label
         },
         target: {
-          expectedLabel: expected
+          expectedLabel: expected || null,
+          expectedRangeExists: sliceCorrect
         }
       };
       console.group('[checkLabel] Evaluate chunk');
       console.log('Input:', payload.input);
       console.log('Target:', payload.target);
-      if (expected === chunk.label) {
+      if (isCorrect) {
         chunk.melt = { type: 'good', hold: 3, life: 1 };
         chunk.locked = true;
         chunk.lockResult = 'good';
@@ -970,11 +974,17 @@
         chunk.melt = { type: 'bad', hold: 3, life: 1 };
         chunk.locked = true;
         chunk.lockResult = 'bad';
-        const damagedPart = PART_BINDINGS[expected] || 'torso';
+        const damagedPart = PART_BINDINGS[expected] || PART_BINDINGS[chunk.label] || 'torso';
         console.log('Result:', 'incorrect');
         console.log('Action:', `Lock chunk, show skull melt for 3s, then fade. Reduce HP from ${damagedPart}.`);
+        console.log('Reason:', {
+          sliceCorrect,
+          labelCorrect
+        });
         adjustHp(damagedPart, -1, chunk);
-        setStatus(`Wrong label. Expected ${labelShortName(expected)} for this slice.`, 'bad');
+        if (!sliceCorrect && !labelCorrect) setStatus('Wrong slice range and label. Skull penalty applied.', 'bad');
+        else if (!sliceCorrect) setStatus('Wrong slice range. Skull penalty applied.', 'bad');
+        else setStatus(`Wrong label. Expected ${labelShortName(expected)} for this slice.`, 'bad');
       }
       console.groupEnd();
     }
