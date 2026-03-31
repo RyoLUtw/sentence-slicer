@@ -650,10 +650,10 @@
         const meltY = y + h * 0.08;
         ctx.save();
         drawRoundedRect(x + 2, meltY, w - 4, h * 0.84, 12);
-        ctx.fillStyle = chunk.melt.type === 'bad' ? `rgba(15,23,42,${alpha})` : `${style?.color || 'rgba(34,197,94,1)'}`;
+        ctx.fillStyle = chunk.melt.type === 'bad' ? `rgba(15,23,42,${alpha})` : `rgba(15,23,42,${alpha})`;
         ctx.fill();
         ctx.font = '30px Arial';
-        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillStyle = chunk.melt.type === 'good' ? (style?.color || '#22c55e') : 'rgba(255,255,255,0.95)';
         ctx.fillText(chunk.melt.type === 'bad' ? '☠' : '💎', x + w / 2 - 10, y + h / 2 + 10);
         ctx.restore();
       }
@@ -1007,13 +1007,15 @@
       const sliceOk = !!activeAnswer?.pieces?.some((p) => p.key === rangeKey(chunk));
       const expected = activeAnswer?.labels?.[rangeKey(chunk)] || null;
       const labelOk = expected ? expected === chunk.label : false;
+      const issues = [];
+      if (!sliceOk) issues.push('Wrong range');
+      if (!labelOk) issues.push('Wrong label');
       reviveTitleEl.textContent = `Revive "${chunk.words.join(' ')}"?`;
       reviveBodyEl.textContent = part
         ? `This will cost 1 HP from ${partLabel(part)} (${hp.parts[part]} → ${Math.max(0, hp.parts[part] - 1)}).`
         : 'No HP part found to spend.';
       analysisBlockEl.innerHTML = `
-        <div class="analysisRow">Slice check: <strong style="color:${sliceOk ? 'var(--good)' : 'var(--bad)'}">${sliceOk ? 'Correct range' : 'Incorrect range'}</strong></div>
-        <div class="analysisRow">Label check: <strong style="color:${labelOk ? 'var(--good)' : 'var(--bad)'}">${labelOk ? 'Correct label' : `Expected ${expected ? labelShortName(expected) : 'n/a'}`}</strong></div>
+        ${issues.length ? issues.map((x) => `<div class="analysisRow"><strong style="color:var(--bad)">${x}</strong></div>`).join('') : '<div class="analysisRow"><strong style="color:var(--good)">No error.</strong></div>'}
       `;
       reviveModalBackdrop.style.display = 'flex';
     }
@@ -1297,7 +1299,8 @@
 
       const target = hitChunk(pos);
       if (target && isChunkLocked(target.chunk)) {
-        openReviveModal(target.chunk);
+        if (target.chunk.lockResult === 'bad') openReviveModal(target.chunk);
+        else setStatus('Correctly labeled locked chunk does not require revive.', 'good');
         return;
       }
       if (target && selectedToolKey) {
