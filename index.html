@@ -76,10 +76,10 @@
     .stageWrap { padding: 14px; }
     .stageInner { position: relative; display: flex; align-items: flex-start; gap: 12px; }
     .modeToggle {
-      position: absolute;
-      left: 12px;
-      top: 12px;
-      z-index: 5;
+      position: fixed;
+      right: 16px;
+      top: 52px;
+      z-index: 20;
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.2);
@@ -235,6 +235,7 @@
 </head>
 <body>
   <label class="debugToggle"><input id="debugToggle" type="checkbox" /> Debug</label>
+  <label class="modeToggle"><input id="modeToggle" type="checkbox" /> Edit correct answer</label>
   <div id="debugTray" class="debugTray">
     <h3 class="debugTitle">Correct answer (debug)</h3>
     <div id="debugList" class="chunkList"></div>
@@ -257,7 +258,6 @@
       <div class="stageInner">
         <div id="toolbelt" class="toolbelt panel"></div>
         <div class="canvasWrap">
-          <label class="modeToggle"><input id="modeToggle" type="checkbox" /> Edit correct answer</label>
           <canvas id="stage"></canvas>
         </div>
       </div>
@@ -278,7 +278,7 @@
         <h2>How this prototype behaves</h2>
         <ul>
           <li>Swipe to split only at legal spaces between words.</li>
-          <li>Drag label tools from the right belt onto sliced elements to color-tag them.</li>
+          <li>Select a tool from the left floating belt, then click a sliced element to apply it.</li>
           <li>Glue tool is toggle-based: click tool, pick element A, pick element B to connect them.</li>
           <li>If an answer key exists for this sentence, labels are auto-checked on drop.</li>
         </ul>
@@ -336,7 +336,7 @@
     const SWIPE_HIT_RADIUS = 18;
     const WORD_PROTECT_RADIUS = 10;
     const SPLIT_GAP = 20;
-    const ROW_GAP = 24;
+    const ROW_GAP = 48;
     const ROW_MARGIN = 24;
     const ROW_FRAME = 16;
     const STORAGE_KEY = 'sentence_slice_answers_v1';
@@ -441,7 +441,7 @@
     }
 
     function createChunk(words, start, end) {
-      return measureChunkLayout({ id: nextChunkId++, words, start, end, w: 0, h: STRIP_H, layout: null, label: null, melt: null });
+      return measureChunkLayout({ id: nextChunkId++, words, start, end, w: 0, h: STRIP_H, layout: null, label: null, melt: null, locked: false, lockResult: null });
     }
 
     function tokenize(sentence) {
@@ -586,9 +586,13 @@
       const w = chunk.w;
       const h = chunk.h;
       const isLocked = !!chunk.locked;
+      const lockStyle = chunk.label ? getLabelStyle(chunk.label) : null;
       drawRoundedRect(x, y, w, h, 18);
       const grad = ctx.createLinearGradient(x, y, x, y + h);
-      if (isLocked) {
+      if (isLocked && chunk.lockResult === 'good' && lockStyle) {
+        grad.addColorStop(0, lockStyle.color);
+        grad.addColorStop(1, lockStyle.color);
+      } else if (isLocked) {
         grad.addColorStop(0, 'rgba(229,231,235,0.98)');
         grad.addColorStop(1, 'rgba(209,213,219,0.98)');
       } else {
@@ -642,13 +646,15 @@
       }
 
       if (chunk.melt && chunk.melt.life > 0) {
-        const p = chunk.melt.life;
-        const alpha = Math.min(0.9, p);
-        const meltY = y + h * (1 - p);
+        const alpha = chunk.melt.hold > 0 ? 0.9 : Math.max(0, chunk.melt.life);
+        const meltY = y + h * 0.08;
         ctx.save();
-        drawRoundedRect(x + 2, meltY, w - 4, h * p, 12);
-        ctx.fillStyle = `rgba(15,23,42,${alpha})`;
+        drawRoundedRect(x + 2, meltY, w - 4, h * 0.84, 12);
+        ctx.fillStyle = chunk.melt.type === 'bad' ? `rgba(15,23,42,${alpha})` : `${style?.color || 'rgba(34,197,94,1)'}`;
         ctx.fill();
+        ctx.font = '30px Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillText(chunk.melt.type === 'bad' ? '☠' : '💎', x + w / 2 - 10, y + h / 2 + 10);
         ctx.restore();
       }
     }
@@ -802,7 +808,11 @@
       for (const row of rows) {
         const items = row.type === 'chunk' ? [row.chunk] : row.items;
         for (const item of items) {
-          if (item.melt && item.melt.life > 0) item.melt.life -= 0.03;
+          if (item.melt) {
+            if (item.melt.hold > 0) item.melt.hold -= 1 / 60;
+            else item.melt.life -= 1 / 60;
+            if (item.melt.life <= 0) item.melt = null;
+          }
         }
       }
     }
@@ -935,18 +945,38 @@
       if (editMode || !activeAnswer) return;
       const expected = activeAnswer.labels[rangeKey(chunk)];
       if (!expected) return;
+      const payload = {
+        input: {
+          range: rangeKey(chunk),
+          words: chunk.words.join(' '),
+          label: chunk.label
+        },
+        target: {
+          expectedLabel: expected
+        }
+      };
+      console.group('[checkLabel] Evaluate chunk');
+      console.log('Input:', payload.input);
+      console.log('Target:', payload.target);
       if (expected === chunk.label) {
-        chunk.melt = { type: 'good', life: 1 };
+        chunk.melt = { type: 'good', hold: 3, life: 1 };
         chunk.locked = true;
+        chunk.lockResult = 'good';
+        console.log('Result:', 'correct');
+        console.log('Action:', `Lock chunk, show crystal melt for 3s, then fade. Award HP to ${PART_BINDINGS[chunk.label]}.`);
         adjustHp(PART_BINDINGS[chunk.label], +1, chunk);
         setStatus(`Correct: ${labelShortName(chunk.label)} validated.`, 'good');
       } else {
-        chunk.melt = { type: 'bad', life: 1 };
+        chunk.melt = { type: 'bad', hold: 3, life: 1 };
         chunk.locked = true;
+        chunk.lockResult = 'bad';
         const damagedPart = PART_BINDINGS[expected] || 'torso';
+        console.log('Result:', 'incorrect');
+        console.log('Action:', `Lock chunk, show skull melt for 3s, then fade. Reduce HP from ${damagedPart}.`);
         adjustHp(damagedPart, -1, chunk);
         setStatus(`Wrong label. Expected ${labelShortName(expected)} for this slice.`, 'bad');
       }
+      console.groupEnd();
     }
 
     function isChunkLocked(chunk) {
@@ -985,6 +1015,7 @@
       const part = getHighestHpPart();
       if (part) adjustHp(part, -1, null);
       hit.chunk.locked = false;
+      hit.chunk.lockResult = null;
       hit.chunk.melt = null;
       closeReviveModal();
       setStatus('Chunk revived. You can operate on it again.', 'good');
