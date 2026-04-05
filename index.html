@@ -74,12 +74,12 @@
     }
     button.warn { border: 1px solid rgba(252, 165, 165, 0.35); color: #ffe4e4; }
     .stageWrap { padding: 14px; }
-    .stageInner { position: relative; }
+    .stageInner { position: relative; display: flex; align-items: flex-start; gap: 12px; }
     .modeToggle {
-      position: absolute;
-      left: 12px;
-      top: 12px;
-      z-index: 5;
+      position: fixed;
+      right: 16px;
+      top: 52px;
+      z-index: 20;
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.2);
@@ -92,11 +92,56 @@
     }
     canvas {
       width: 100%;
-      height: min(62vh, 620px);
+      height: 520px;
       display: block;
       border-radius: 16px;
       background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
     }
+    .canvasWrap { flex: 1; min-width: 0; }
+    .toolbelt {
+      position: sticky;
+      top: 12px;
+      align-self: flex-start;
+      width: 64px;
+      max-height: 72vh;
+      overflow: auto;
+      padding: 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(15,23,42,0.82);
+      transition: width 180ms ease;
+    }
+    .toolbelt.expanded { width: 220px; }
+    .toolbeltToggle { width: 100%; margin-bottom: 8px; padding: 8px 10px; }
+    .toolList { display: grid; gap: 8px; }
+    .toolBtn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(125,211,252,0.45);
+      background: rgba(125,211,252,0.12);
+      color: #d9f3ff;
+      cursor: pointer;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+    .toolbelt:not(.expanded) .toolLabel { display: none; }
+    .toolBtn.active { border-color: rgba(251,191,36,0.9); background: rgba(251,191,36,0.22); }
+    .modalBackdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.52);
+      display: none; align-items: center; justify-content: center; z-index: 30;
+    }
+    .modal {
+      width: min(560px, calc(100% - 24px));
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(15,23,42,0.96);
+    }
+    .analysisRow { margin: 8px 0; color: var(--muted); }
     .hud {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -190,6 +235,7 @@
 </head>
 <body>
   <label class="debugToggle"><input id="debugToggle" type="checkbox" /> Debug</label>
+  <label class="modeToggle"><input id="modeToggle" type="checkbox" /> Edit correct answer</label>
   <div id="debugTray" class="debugTray">
     <h3 class="debugTitle">Correct answer (debug)</h3>
     <div id="debugList" class="chunkList"></div>
@@ -210,8 +256,10 @@
 
     <section class="panel stageWrap">
       <div class="stageInner">
-        <label class="modeToggle"><input id="modeToggle" type="checkbox" /> Edit correct answer</label>
-        <canvas id="stage"></canvas>
+        <div id="toolbelt" class="toolbelt panel"></div>
+        <div class="canvasWrap">
+          <canvas id="stage"></canvas>
+        </div>
       </div>
       <div class="hud">
         <div id="hpCard" class="hudCard">
@@ -230,7 +278,7 @@
         <h2>How this prototype behaves</h2>
         <ul>
           <li>Swipe to split only at legal spaces between words.</li>
-          <li>Drag label tools from the right belt onto sliced elements to color-tag them.</li>
+          <li>Select a tool from the left floating belt, then click a sliced element to apply it.</li>
           <li>Glue tool is toggle-based: click tool, pick element A, pick element B to connect them.</li>
           <li>If an answer key exists for this sentence, labels are auto-checked on drop.</li>
         </ul>
@@ -241,6 +289,17 @@
         <div id="chunkList" class="chunkList"></div>
       </div>
     </section>
+  </div>
+  <div id="reviveModalBackdrop" class="modalBackdrop">
+    <div class="modal">
+      <h2 id="reviveTitle">Revive chunk?</h2>
+      <p id="reviveBody" class="sub"></p>
+      <div id="analysisBlock"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+        <button id="reviveCancelBtn" class="secondary">Cancel</button>
+        <button id="reviveConfirmBtn">Confirm</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -260,6 +319,13 @@
     const crystalInfoEl = document.getElementById('crystalInfo');
     const hpCard = document.getElementById('hpCard');
     const crystalCard = document.getElementById('crystalCard');
+    const toolbeltEl = document.getElementById('toolbelt');
+    const reviveModalBackdrop = document.getElementById('reviveModalBackdrop');
+    const reviveTitleEl = document.getElementById('reviveTitle');
+    const reviveBodyEl = document.getElementById('reviveBody');
+    const reviveCancelBtn = document.getElementById('reviveCancelBtn');
+    const reviveConfirmBtn = document.getElementById('reviveConfirmBtn');
+    const analysisBlockEl = document.getElementById('analysisBlock');
 
     const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     const FONT = '24px Arial';
@@ -270,10 +336,9 @@
     const SWIPE_HIT_RADIUS = 18;
     const WORD_PROTECT_RADIUS = 10;
     const SPLIT_GAP = 20;
-    const ROW_GAP = 24;
+    const ROW_GAP = 48;
     const ROW_MARGIN = 24;
     const ROW_FRAME = 16;
-    const TOOLBAR_W = 170;
     const STORAGE_KEY = 'sentence_slice_answers_v1';
     const DEFAULT_SENTENCE = 'After the rain stopped, the children played soccer in the park yesterday.';
     const DEFAULT_SENTENCE_KEY = normalizeSentence(DEFAULT_SENTENCE);
@@ -308,7 +373,6 @@
     let panAnchorX = 0;
     let panStartScroll = 0;
     let dragGhost = null;
-    let toolLayout = null;
     let nextChunkId = 1;
     let glueMode = false;
     let gluePending = null;
@@ -318,6 +382,9 @@
     let debugMode = false;
     let answerBank = loadAnswerBank();
     let activeAnswer = null;
+    let toolbarExpanded = false;
+    let selectedToolKey = null;
+    let pendingReviveChunkId = null;
 
     const hp = {
       max: 3,
@@ -343,14 +410,18 @@
       answerBank[DEFAULT_SENTENCE_KEY] = {
         sentence: DEFAULT_SENTENCE_KEY,
         labels: {
-          '0-4': 'modifier',
+          '0-1': 'connecting',
+          '1-3': 'subject',
+          '3-4': 'verb',
           '4-6': 'subject',
           '6-7': 'verb',
           '7-8': 'object',
           '8-12': 'modifier'
         },
         pieces: [
-          { key: '0-4', words: 'After the rain stopped,', label: 'modifier' },
+          { key: '0-1', words: 'After', label: 'connecting' },
+          { key: '1-3', words: 'the rain', label: 'subject' },
+          { key: '3-4', words: 'stopped,', label: 'verb' },
           { key: '4-6', words: 'the children', label: 'subject' },
           { key: '6-7', words: 'played', label: 'verb' },
           { key: '7-8', words: 'soccer', label: 'object' },
@@ -370,7 +441,7 @@
     }
 
     function createChunk(words, start, end) {
-      return measureChunkLayout({ id: nextChunkId++, words, start, end, w: 0, h: STRIP_H, layout: null, label: null, melt: null });
+      return measureChunkLayout({ id: nextChunkId++, words, start, end, w: 0, h: STRIP_H, layout: null, label: null, melt: null, locked: false, lockResult: null });
     }
 
     function tokenize(sentence) {
@@ -425,7 +496,7 @@
     }
 
     function getWorkWidth() {
-      return Math.max(320, canvas.clientWidth - TOOLBAR_W - 16);
+      return Math.max(320, canvas.clientWidth);
     }
 
     function getRowContentWidth(row) {
@@ -448,6 +519,11 @@
         row.contentW = getRowContentWidth(row);
         ensureRowScrollBounds(row);
         y += row.rowH + ROW_GAP;
+      }
+      const neededHeight = Math.max(420, Math.ceil(y + 30));
+      if (Math.abs(canvas.clientHeight - neededHeight) > 2) {
+        canvas.style.height = `${neededHeight}px`;
+        resizeCanvas();
       }
       updateChunkList();
     }
@@ -509,10 +585,20 @@
     function drawChunkAt(chunk, x, y) {
       const w = chunk.w;
       const h = chunk.h;
+      const isLocked = !!chunk.locked;
+      const lockStyle = chunk.label ? getLabelStyle(chunk.label) : null;
       drawRoundedRect(x, y, w, h, 18);
       const grad = ctx.createLinearGradient(x, y, x, y + h);
-      grad.addColorStop(0, 'rgba(254, 240, 138, 0.95)');
-      grad.addColorStop(1, 'rgba(251, 191, 36, 0.95)');
+      if (isLocked && chunk.lockResult === 'good' && lockStyle) {
+        grad.addColorStop(0, lockStyle.color);
+        grad.addColorStop(1, lockStyle.color);
+      } else if (isLocked) {
+        grad.addColorStop(0, 'rgba(229,231,235,0.98)');
+        grad.addColorStop(1, 'rgba(209,213,219,0.98)');
+      } else {
+        grad.addColorStop(0, 'rgba(254, 240, 138, 0.95)');
+        grad.addColorStop(1, 'rgba(251, 191, 36, 0.95)');
+      }
       ctx.fillStyle = grad;
       ctx.fill();
 
@@ -533,7 +619,7 @@
         drawRoundedRect(wx, wy, word.w, h - 20, 12);
         ctx.fillStyle = 'rgba(255,255,255,0.18)';
         ctx.fill();
-        ctx.fillStyle = '#3b2200';
+        ctx.fillStyle = isLocked ? '#d1d5db' : '#3b2200';
         ctx.fillText(word.text, wx + WORD_PAD_X, y + h / 2 + 1);
       }
 
@@ -560,16 +646,15 @@
       }
 
       if (chunk.melt && chunk.melt.life > 0) {
-        const p = chunk.melt.life;
-        const alpha = Math.min(0.9, p);
-        const meltY = y + h * (1 - p);
+        const alpha = chunk.melt.hold > 0 ? 0.9 : Math.max(0, chunk.melt.life);
+        const meltY = y + h * 0.08;
         ctx.save();
-        drawRoundedRect(x + 2, meltY, w - 4, h * p, 12);
-        ctx.fillStyle = chunk.melt.type === 'bad' ? `rgba(220,38,38,${alpha})` : `rgba(16,185,129,${alpha})`;
+        drawRoundedRect(x + 2, meltY, w - 4, h * 0.84, 12);
+        ctx.fillStyle = chunk.melt.type === 'bad' ? `rgba(15,23,42,${alpha})` : `rgba(15,23,42,${alpha})`;
         ctx.fill();
-        ctx.font = '32px Arial';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(chunk.melt.type === 'bad' ? '☠' : '💎', x + w / 2 - 12, y + h / 2 + 8);
+        ctx.font = '30px Arial';
+        ctx.fillStyle = chunk.melt.type === 'good' ? (style?.color || '#22c55e') : 'rgba(255,255,255,0.95)';
+        ctx.fillText(chunk.melt.type === 'bad' ? '☠' : '💎', x + w / 2 - 10, y + h / 2 + 10);
         ctx.restore();
       }
     }
@@ -634,40 +719,34 @@
       ctx.restore();
     }
 
-    function drawToolbar() {
-      const x = getWorkWidth() + 8;
-      const w = TOOLBAR_W - 16;
-      const y = 58;
-      const h = Math.max(210, canvas.clientHeight - 112);
-      toolLayout = {};
-
-      ctx.save();
-      drawRoundedRect(x, y, w, h, 16);
-      ctx.fillStyle = 'rgba(15,23,42,0.7)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-      ctx.stroke();
-
-      let slotY = y + 12;
+    function renderToolbelt() {
+      toolbeltEl.classList.toggle('expanded', toolbarExpanded);
+      toolbeltEl.innerHTML = '';
+      const toggle = document.createElement('button');
+      toggle.className = 'secondary toolbeltToggle';
+      toggle.textContent = toolbarExpanded ? '⬅ Collapse' : '➡ Tools';
+      toggle.addEventListener('click', () => {
+        toolbarExpanded = !toolbarExpanded;
+        renderToolbelt();
+      });
+      toolbeltEl.appendChild(toggle);
+      const list = document.createElement('div');
+      list.className = 'toolList';
       for (const tool of TOOL_DEFS) {
-        const slot = { x: x + 10, y: slotY, w: w - 20, h: 42 };
-        toolLayout[tool.key] = slot;
-        drawRoundedRect(slot.x, slot.y, slot.w, slot.h, 10);
-        const active = tool.key === 'glue' && glueMode;
-        ctx.fillStyle = active ? 'rgba(251,191,36,0.35)' : 'rgba(125,211,252,0.12)';
-        ctx.fill();
-        ctx.strokeStyle = active ? 'rgba(251,191,36,0.95)' : 'rgba(125,211,252,0.45)';
-        ctx.stroke();
-
-        ctx.fillStyle = tool.color || '#d9f3ff';
-        ctx.font = 'bold 13px Arial';
-        ctx.fillText(tool.short, slot.x + 8, slot.y + 25);
-        ctx.fillStyle = '#d9f3ff';
-        ctx.font = '11px Arial';
-        ctx.fillText(tool.name, slot.x + 40, slot.y + 25);
-        slotY += 48;
+        const btn = document.createElement('button');
+        btn.className = 'toolBtn' + (selectedToolKey === tool.key ? ' active' : '');
+        btn.innerHTML = `<span>${tool.short}</span><span class="toolLabel">${tool.name}</span>`;
+        btn.addEventListener('click', () => {
+          selectedToolKey = selectedToolKey === tool.key ? null : tool.key;
+          if (tool.key === 'glue') glueMode = selectedToolKey === 'glue';
+          else if (glueMode) glueMode = false;
+          gluePending = null;
+          setStatus(selectedToolKey ? `${tool.name} selected. Click an element.` : 'Tool unselected.');
+          renderToolbelt();
+        });
+        list.appendChild(btn);
       }
-      ctx.restore();
+      toolbeltEl.appendChild(list);
     }
 
     function drawSwipeTrail() {
@@ -729,7 +808,11 @@
       for (const row of rows) {
         const items = row.type === 'chunk' ? [row.chunk] : row.items;
         for (const item of items) {
-          if (item.melt && item.melt.life > 0) item.melt.life -= 0.03;
+          if (item.melt) {
+            if (item.melt.hold > 0) item.melt.hold -= 1 / 60;
+            else item.melt.life -= 1 / 60;
+            if (item.melt.life <= 0) item.melt = null;
+          }
         }
       }
     }
@@ -809,6 +892,7 @@
 
     function performCut(entry, splitIndex, flashX) {
       const chunk = entry.chunk;
+      if (isChunkLocked(chunk)) return setStatus('This melted element is locked. Click it to revive first.', 'bad');
       const row = entry.row;
       const rowIndex = rows.indexOf(row);
       if (rowIndex === -1) return;
@@ -838,6 +922,7 @@
     }
 
     function wrapChunk(entry) {
+      if (isChunkLocked(entry.chunk)) return setStatus('This melted element is locked. Click it to revive first.', 'bad');
       const row = entry.row;
       const rowIndex = rows.indexOf(row);
       if (rowIndex === -1) return;
@@ -850,6 +935,7 @@
     }
 
     function applyLabelToChunk(chunk, labelKey) {
+      if (isChunkLocked(chunk)) return setStatus('This melted element is locked. Click it to revive first.', 'bad');
       chunk.label = labelKey;
       updateChunkList();
       checkLabel(chunk);
@@ -857,18 +943,99 @@
 
     function checkLabel(chunk) {
       if (editMode || !activeAnswer) return;
-      const expected = activeAnswer.labels[rangeKey(chunk)];
-      if (!expected) return;
-      if (expected === chunk.label) {
-        chunk.melt = { type: 'good', life: 1 };
+      const key = rangeKey(chunk);
+      const expected = activeAnswer.labels[key];
+      const sliceCorrect = !!activeAnswer.pieces?.some((piece) => piece.key === key);
+      const labelCorrect = !!expected && expected === chunk.label;
+      const isCorrect = sliceCorrect && labelCorrect;
+      const payload = {
+        input: {
+          range: key,
+          words: chunk.words.join(' '),
+          label: chunk.label
+        },
+        target: {
+          expectedLabel: expected || null,
+          expectedRangeExists: sliceCorrect
+        }
+      };
+      console.group('[checkLabel] Evaluate chunk');
+      console.log('Input:', payload.input);
+      console.log('Target:', payload.target);
+      if (isCorrect) {
+        chunk.melt = { type: 'good', hold: 3, life: 1 };
+        chunk.locked = true;
+        chunk.lockResult = 'good';
+        console.log('Result:', 'correct');
+        console.log('Action:', `Lock chunk, show crystal melt for 3s, then fade. Award HP to ${PART_BINDINGS[chunk.label]}.`);
         adjustHp(PART_BINDINGS[chunk.label], +1, chunk);
         setStatus(`Correct: ${labelShortName(chunk.label)} validated.`, 'good');
       } else {
-        chunk.melt = { type: 'bad', life: 1 };
-        const damagedPart = PART_BINDINGS[expected] || 'torso';
+        chunk.melt = { type: 'bad', hold: 3, life: 1 };
+        chunk.locked = true;
+        chunk.lockResult = 'bad';
+        const damagedPart = PART_BINDINGS[expected] || PART_BINDINGS[chunk.label] || 'torso';
+        console.log('Result:', 'incorrect');
+        console.log('Action:', `Lock chunk, show skull melt for 3s, then fade. Reduce HP from ${damagedPart}.`);
+        console.log('Reason:', {
+          sliceCorrect,
+          labelCorrect
+        });
         adjustHp(damagedPart, -1, chunk);
-        setStatus(`Wrong label. Expected ${labelShortName(expected)} for this slice.`, 'bad');
+        if (!sliceCorrect && !labelCorrect) setStatus('Wrong slice range and label. Skull penalty applied.', 'bad');
+        else if (!sliceCorrect) setStatus('Wrong slice range. Skull penalty applied.', 'bad');
+        else setStatus(`Wrong label. Expected ${labelShortName(expected)} for this slice.`, 'bad');
       }
+      console.groupEnd();
+    }
+
+    function isChunkLocked(chunk) {
+      return !editMode && !!chunk.locked;
+    }
+
+    function getHighestHpPart() {
+      return Object.entries(hp.parts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    }
+
+    function partLabel(part) {
+      return { head: 'Head', limbs: 'Limbs', torso: 'Torso', equipment: 'Equipment' }[part] || part;
+    }
+
+    function openReviveModal(chunk) {
+      pendingReviveChunkId = chunk.id;
+      const part = getHighestHpPart();
+      const sliceOk = !!activeAnswer?.pieces?.some((p) => p.key === rangeKey(chunk));
+      const expected = activeAnswer?.labels?.[rangeKey(chunk)] || null;
+      const labelOk = expected ? expected === chunk.label : false;
+      const issues = [];
+      if (!sliceOk) issues.push('Wrong range');
+      if (!labelOk) issues.push('Wrong label');
+      reviveTitleEl.textContent = `Revive "${chunk.words.join(' ')}"?`;
+      reviveBodyEl.textContent = part
+        ? `This will cost 1 HP from ${partLabel(part)} (${hp.parts[part]} → ${Math.max(0, hp.parts[part] - 1)}).`
+        : 'No HP part found to spend.';
+      analysisBlockEl.innerHTML = `
+        ${issues.length ? issues.map((x) => `<div class="analysisRow"><strong style="color:var(--bad)">${x}</strong></div>`).join('') : '<div class="analysisRow"><strong style="color:var(--good)">No error.</strong></div>'}
+      `;
+      reviveModalBackdrop.style.display = 'flex';
+    }
+
+    function confirmRevive() {
+      if (!pendingReviveChunkId) return;
+      const hit = renderMap.find((r) => r.chunk.id === pendingReviveChunkId);
+      if (!hit) return closeReviveModal();
+      const part = getHighestHpPart();
+      if (part) adjustHp(part, -1, null);
+      hit.chunk.locked = false;
+      hit.chunk.lockResult = null;
+      hit.chunk.melt = null;
+      closeReviveModal();
+      setStatus('Chunk revived. You can operate on it again.', 'good');
+    }
+
+    function closeReviveModal() {
+      pendingReviveChunkId = null;
+      reviveModalBackdrop.style.display = 'none';
     }
 
     function adjustHp(part, delta, chunk) {
@@ -1046,14 +1213,6 @@
       return null;
     }
 
-    function hitTool(pos) {
-      for (const tool of TOOL_DEFS) {
-        const slot = toolLayout?.[tool.key];
-        if (slot && pointInRect(pos, slot)) return tool;
-      }
-      return null;
-    }
-
     function toggleGlueMode() {
       glueMode = !glueMode;
       gluePending = null;
@@ -1116,6 +1275,7 @@
     }
 
     function applyGlueSelection(chunk) {
+      if (isChunkLocked(chunk)) return setStatus('This melted element is locked. Click it to revive first.', 'bad');
       if (!gluePending) {
         gluePending = chunk.id;
         setStatus('First glue target selected. Now select the second element.', 'good');
@@ -1137,18 +1297,22 @@
       evt.preventDefault();
       const pos = getPos(evt);
 
-      const tool = hitTool(pos);
-      if (tool) {
-        if (tool.type === 'glue') {
-          toggleGlueMode();
-          return;
-        }
-        dragMode = 'toolDrag';
-        dragGhost = { toolKey: tool.key, x: pos.x, y: pos.y };
+      const target = hitChunk(pos);
+      if (target && isChunkLocked(target.chunk)) {
+        if (target.chunk.lockResult === 'bad') openReviveModal(target.chunk);
+        else setStatus('Correctly labeled locked chunk does not require revive.', 'good');
         return;
       }
-
-      const target = hitChunk(pos);
+      if (target && selectedToolKey) {
+        const tool = TOOL_DEFS.find((t) => t.key === selectedToolKey);
+        if (!tool) return;
+        if (tool.type === 'bag') wrapChunk(target);
+        else if (tool.type === 'label') {
+          applyLabelToChunk(target.chunk, tool.key);
+          if (editMode) persistCurrentAsAnswer();
+        } else if (tool.type === 'glue') applyGlueSelection(target.chunk);
+        return;
+      }
       if (glueMode && target) {
         dragMode = 'glueSelect';
         return;
@@ -1178,9 +1342,6 @@
       } else if (dragMode === 'pan' && activeRow) {
         activeRow.scrollX = panStartScroll - (pos.x - panAnchorX);
         ensureRowScrollBounds(activeRow);
-      } else if (dragMode === 'toolDrag' && dragGhost) {
-        dragGhost.x = pos.x;
-        dragGhost.y = pos.y;
       }
     }
 
@@ -1195,18 +1356,6 @@
         setTimeout(() => (swipePoints = []), 70);
       } else if (dragMode === 'pan') {
         setStatus('Dragged lane horizontally to inspect cropped content.');
-      } else if (dragMode === 'toolDrag') {
-        const target = hitChunk(pos);
-        const tool = TOOL_DEFS.find((t) => t.key === dragGhost?.toolKey);
-        if (!tool || !target) {
-          setStatus('Drop a tool onto a sentence element.', 'bad');
-        } else if (tool.type === 'bag') {
-          wrapChunk(target);
-        } else if (tool.type === 'label') {
-          applyLabelToChunk(target.chunk, tool.key);
-          if (editMode) persistCurrentAsAnswer();
-          setStatus(`${tool.name} applied.`, 'good');
-        }
       } else if (dragMode === 'glueSelect') {
         const target = hitChunk(pos);
         if (target) applyGlueSelection(target.chunk);
@@ -1225,7 +1374,6 @@
       ctx.restore();
 
       drawRows();
-      drawToolbar();
       drawSwipeTrail();
       updateParticles();
       drawParticles();
@@ -1237,6 +1385,11 @@
     loadBtn.addEventListener('click', applySentenceChange);
     resetBtn.addEventListener('click', applySentenceChange);
     loadSavedBtn.addEventListener('click', loadSavedSentence);
+    reviveCancelBtn.addEventListener('click', closeReviveModal);
+    reviveConfirmBtn.addEventListener('click', confirmRevive);
+    reviveModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === reviveModalBackdrop) closeReviveModal();
+    });
     modeToggleEl.addEventListener('change', () => {
       editMode = modeToggleEl.checked;
       gluePending = null;
@@ -1273,6 +1426,7 @@
 
     resizeCanvas();
     ensureDefaultAnswer();
+    renderToolbelt();
     renderHudVisibility();
     renderHp();
     applySentenceChange();
